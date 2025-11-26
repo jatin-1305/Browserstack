@@ -5,7 +5,6 @@ import printData as prd
 
 
 def second(driver,browser):
-    print("Inside collect.py")
     d = {'Title': [], 'Content': []}
 
     title=[]
@@ -53,7 +52,6 @@ def second(driver,browser):
 
     d['Title'] = title
     d['Content'] = content
-    # d['Image_Link'] = image
 
     df = pd.DataFrame(data = d)
     df.to_csv('data.csv')

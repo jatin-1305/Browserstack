@@ -25,14 +25,14 @@ def fourth(title,content,image,driver,browser):
     for item in english_text:
         words.extend(item.split())
 
-    # Step 2: Clean each word (remove special chars & lowercase)
+    # removing special characters
     cleaned_words = [
         re.sub(r'[^a-zA-Z0-9]', '', word).lower()
         for word in words
         if word.strip()
     ]
 
-    # Step 3: Count and find duplicates
+    # finding duplicates
     word_counts = Counter(cleaned_words)
     duplicates = {word:count for word, count in word_counts.items() if count > 1}
     

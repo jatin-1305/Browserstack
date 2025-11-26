@@ -1,12 +1,15 @@
-# browserstack_tests.py
 import os
 import threading
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 import project as p
+import concurrent.futures
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.edge.options import Options as EdgeOptions
+from selenium.webdriver.safari.options import Options as SafariOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
-options = webdriver.ChromeOptions()
 import yaml
 
 def fetch_yaml_data(file_path):
@@ -30,107 +33,49 @@ if not BROWSERSTACK_USERNAME or not BROWSERSTACK_ACCESS_KEY:
 
 BS_HUB = f"https://{BROWSERSTACK_USERNAME}:{BROWSERSTACK_ACCESS_KEY}@hub.browserstack.com/wd/hub"
 
-# Define 5 desired capabilities for 5 parallel runs (mix desktop + mobile)
-CAPABILITIES = [
-    # Desktop Chrome
-    {
-        "browserName": "Chrome",
-        "browserVersion": "120.0",
-        "bstack:options": {
-            "os": "Windows",
-            "osVersion": "11",
-            "sessionName": "ElPais Opinion - Desktop Chrome",
-            "local": False,
-        }
-    },
-    # Desktop Firefox
-    {
-        "browserName": "Firefox",
-        "browserVersion": "120.0",
-        "bstack:options": {
-            "os": "OS X",
-            "osVersion": "Monterey",
-            "sessionName": "ElPais Opinion - Desktop Firefox",
-            "local": False,
-        }
-    },
-    # Edge
-    {
-        "browserName": "Edge",
-        "browserVersion": "120.0",
-        "bstack:options": {
-            "os": "Windows",
-            "osVersion": "11",
-            "sessionName": "ElPais Opinion - Desktop Edge",
-            "local": False,
-        }
-    },
-    # iPhone Safari
-    {
-        "browserName": "Safari",
-        "browserVersion": "16.0",
-        "bstack:options": {
-            "realMobile": True,
-            "deviceName": "iPhone 14",
-            "osVersion": "16",
-            "sessionName": "ElPais Opinion - iPhone Safari",
-            "local": False,
-        }
-    },
-    # Android Chrome
-    {
-        "browserName": "Chrome",
-        "browserVersion": "120.0",
-        "bstack:options": {
-            "realMobile": True,
-            "deviceName": "Samsung Galaxy S22",
-            "osVersion": "12.0",
-            "sessionName": "ElPais Opinion - Android Chrome",
-            "local": False,
-        }
-    },
-]
-
 TARGET_URL = "https://elpais.com/opinion/"
 
 
-def run_test(cap):
-    session_name = cap["bstack:options"]["sessionName"]
+def run_test(browsers):
+
+    session_name = browsers["name"]
+    print(session_name)
     try:
         print(f"[{session_name}] Starting session...")
 
-        # Use ChromeOptions for compatibility with Selenium 4
-        options = webdriver.ChromeOptions()
-        for key, value in cap.items():
-            options.set_capability(key, value)
+        options = browsers["options"]
+        driver = webdriver.Remote(command_executor=BS_HUB, options=options)
 
-        browser = cap['browserName']
-        driver = webdriver.Remote(
-            command_executor=BS_HUB,
-            options=options
-        )
-
-        driver.set_page_load_timeout(6)
         driver.get(TARGET_URL)
 
-        p.first(driver,browser)
+        p.first(driver,session_name)
+
+        driver.execute_script(
+            'browserstack_executor: {"action": "setSessionStatus", '
+            '"arguments": {"status":"passed", "reason": "Project Scraping completed with Browserstack"}}'
+        )
 
         driver.close()
 
     except Exception as e:
         print(f"[{session_name}] Error:", e)
+        driver.execute_script(
+                'browserstack_executor: {"action": "setSessionStatus", '
+                '"arguments": {"status":"failed", "reason": "Error: %s"}}' % str(e)
+            )
+
+
+browsers = [
+    {"name": "Chrome-Win11", "options": webdriver.ChromeOptions()},
+    {"name": "Edge-Win11", "options": webdriver.EdgeOptions()},
+    {"name": "Safari-macOS", "options": webdriver.SafariOptions()},
+    {"name": "Chrome-Android", "options": webdriver.ChromeOptions()},
+    {"name": "Safari-iPhone", "options": webdriver.SafariOptions()},
+]
 
 
 
-def main():
-    threads = []
-    for cap in CAPABILITIES:
-        t = threading.Thread(target=run_test, args=(cap,))
-        t.start()
-        threads.append(t)
-    for t in threads:
-        t.join()
-    print("All BrowserStack sessions finished.")
+with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    executor.map(run_test, browsers)
+print("All BrowserStack sessions finished.")
 
-if __name__ == "__main__":
-    main()
